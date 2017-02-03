@@ -19,7 +19,7 @@ I want to discuss whether the difference in education background for each presid
 
 Do the following steps for each section:
 
-1.Compare the total word count dor each inaugural speech 
+1.Compare the total word count for each inaugural speech 
 
 2.Compare the first 20 most common words in each group and create a wordcloud
 
