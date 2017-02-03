@@ -15,11 +15,18 @@ Term: Spring 2017
 
 I want to discuss whether the difference in education background for each president will effect their inaugural speech. So I focus on the two difference in education backgrounds, first one is some of the presidents read graduate schools while some did not; and second point is that some presidents are graduate from Law School, while others are from other departments.
 
+
+
 Do the following steps for each section:
+
 1.Compare the total word count dor each inaugural speech 
+
 2.Compare the first 20 most common words in each group and create a wordcloud
+
 3.Compare the frequency of some specified words
+
 4.Compare the sentence length
+
 5.Compare the emotion
 
 And summerize the result.
