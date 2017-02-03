@@ -8,10 +8,34 @@ This is the first and only *individual* (as opposed to *team*) this semester.
 
 Term: Spring 2017
 
-+ Projec title: Lorem ipsum dolor sit amet
-+ This project is conducted by [your name]
++ Projec title: The Relationship Between President's Education and Their Inaugural Speech.
++ This project is conducted by Zixuan Guan
 
-+ Project summary: [a short summary] Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
++ Project summary: 
+
+I want to discuss whether the difference in education background for each president will effect their inaugural speech. So I focus on the two difference in education backgrounds, first one is some of the presidents read graduate schools while some did not; and second point is that some presidents are graduate from Law School, while others are from other departments.
+
+Do the following steps for each section:
+1.Compare the total word count dor each inaugural speech 
+2.Compare the first 20 most common words in each group and create a wordcloud
+3.Compare the frequency of some specified words
+4.Compare the sentence length
+5.Compare the emotion
+
+And summerize the result.
+
+# Final conclusion
+
+President from law school control the length of inaugural speech at around 2000 words. They use shorter sentences, smoother tone, more neutral words and less frequency of using objective words than those who do not have law school background.
+
+President from graduate school have inaugural speeches very similar to those from law school while presidnt with only udergraduate degree have inaugural speeches very similar to those without law school background.
+
+
+
+
+
+
+
 
 Following [suggestions](http://nicercode.github.io/blog/2013-04-05-projects/) by [RICH FITZJOHN](http://nicercode.github.io/about/#Team) (@richfitz). This folder is orgarnized as follows.
 

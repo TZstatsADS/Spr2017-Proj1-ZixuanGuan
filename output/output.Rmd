@@ -1,0 +1,404 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+# Library
+
+
+```{r, message=FALSE, warning=FALSE}
+library("xlsx")
+library("rvest")
+library("magrittr")
+library("dplyr")
+library("readr")
+library("tidytext")
+library("tm")
+library("ggplot2")
+library("wordcloud")
+library("RColorBrewer")
+library("qdap")
+library("syuzhet")
+
+source("../lib/plotstacked.R")
+source("../lib/speechFuncs.R")
+```
+
+# Scrap inaugural speech
+
+
+```{r, message=FALSE, warning=FALSE}
+### Inauguaral speeches
+main.page <- read_html(x = "http://www.presidency.ucsb.edu/inaugurals.php")
+# Get link URLs
+# f.speechlinks is a function for extracting links from the list of speeches. 
+inaug=f.speechlinks(main.page)
+inaug=inaug[-nrow(inaug),] # remove the last line, irrelevant due to error.
+
+
+inaug.list=read.csv("../data/inauglist.csv", stringsAsFactors = FALSE)
+
+inaug.list$type=rep("inaug", nrow(inaug.list))
+                  
+inaug.list=cbind(inaug.list, inaug)
+
+inaug.list$fulltext=NA
+for(i in seq(nrow(inaug.list))) {
+    text <- read_html(inaug.list$urls[i]) %>% # load the page
+    html_nodes(".displaytext") %>% # isloate the text
+    html_text() # get the text
+  inaug.list$fulltext[i]=text
+  # Create the file name
+  filename <- paste0("../data/fulltext/", 
+                     inaug.list$type[i],
+                     inaug.list$File[i], "-", 
+                     inaug.list$Term[i], ".txt")
+  sink(file = filename) %>% # open file to write 
+  cat(text)  # write the file
+  sink() # close the file
+}
+
+
+```
+
+# Merge inaugural speech details and president education background details
+
+```{r, message=FALSE, warning=FALSE}
+education<-read.xlsx("../data/education.xlsx",sheetIndex = 1,header=T)
+law<-read.xlsx("../data/Law.xlsx",sheetIndex = 1,header = T)
+df1<-merge(inaug.list,education,by="President",all=F)
+df<-merge(df1,law,by="President",all=T)
+df<-df[,c(1,6,11,13,14)]
+df$id<-c(1:nrow(df))
+```
+
+# First Section 
+Compare difference between president with Law School background and those without.
+
+ 
+The average total words length of the inaugural speech is 2354 words. I pointed out the outlier among all the president, William Henry Harrison, his speech is significantly longer than others and he did not have the law school background.
+
+ 
+From the graph, president graduate from law school have speeches maintain at an average length around 2000 words, and without significant fluctuation. Seems that president from law school knows how to well control the length of a speech and they have the same standard. While president without law school background have their inaugural speech with very different length.
+
+
+```{r, message=FALSE, warning=FALSE}
+mean(df$Words)
+
+df$President[which.max(df$Words)]
+
+ggplot(df,aes(x=id,y=Words,color=as.numeric(is.na(df$School)==F),group=is.na(df$School)))+geom_point(alpha=0.8)+geom_smooth(alpha=.5, size=1)
+```
+
+
+# What is the difference between most common words?
+
+ 
+From comparation of two bar plots, president from law school have unique common words "Rights", "Cause", "Faith", "Ourselves", "Purpose", and also they have higher mention of "Justice" than the other group. 
+
+
+While in the speeches of president without law school background, the unique common words are "United", "Liberty", "Public", "War".
+
+
+```{r, message=FALSE, warning=FALSE}
+
+commonword<-function(df){
+speech_words <- df %>% 
+  mutate(id=factor(President)) %>% 
+  unnest_tokens(word,fulltext) %>%
+  count(President, word, sort = TRUE) %>%
+  ungroup()
+total_words <- speech_words %>% 
+  group_by(President) %>% 
+  summarize(total = sum(n))
+ 
+speech_words <- left_join(speech_words, total_words) %>% 
+  anti_join(stop_words %>% filter(lexicon=="onix") %>% 
+              select(-lexicon) %>% 
+              union(data.frame(word=c("s","so"))),by="word")
+
+speech_freq <- speech_words %>% 
+  group_by(word) %>% 
+  summarize(frequency=n()) %>% 
+  arrange(desc(frequency))
+
+ggplot(speech_freq %>% ungroup() %>% slice(1:20), aes(reorder(word,desc(frequency)))) +
+  geom_bar(aes(y=frequency),stat="identity",alpha = 0.8, show.legend = FALSE) +
+  labs(title = "Term Frequency Distribution in Presidential Inaugural Addresses") +
+    xlab("Word") + ylab("Frequency") + theme(axis.text.x = element_text(angle = 45, hjust = 1))}
+
+
+
+commonword(df[is.na(df$School)==F,])
+commonword(df[is.na(df$School)==T,])
+```
+# Wordcloud
+
+A much clearly view of the most frequency words. It is interesting that both groups of presidents use the word "WILL" with a high frequency, this phenomenon fit the main purpose of an inaugural speech, which is introduce the plan of the next few days.
+
+```{r, message=FALSE, warning=FALSE}
+
+wordcloudfun<-function(df){
+docs <- Corpus(VectorSource(df$fulltext))
+docs <-tm_map(docs,content_transformer(tolower))
+docs <- tm_map(docs, removePunctuation)
+docs <- tm_map(docs, removeNumbers)
+docs <- tm_map(docs, removeWords, stopwords("english"))
+docs <- tm_map(docs, stripWhitespace)
+docs <- tm_map(docs,stemDocument)
+tdm<-TermDocumentMatrix(docs)
+tdm.tidy=tidy(tdm)
+tdm.overall=summarise(group_by(tdm.tidy, term), sum(count))
+wordcloud(tdm.overall$term, tdm.overall$`sum(count)`,
+          scale=c(5,0.5),
+          max.words=30,
+          min.freq=5,
+          random.order=FALSE,
+          rot.per=0.3,
+          use.r.layout=T,
+          random.color=FALSE,
+          colors=brewer.pal(9,"Blues")) }
+par(mfrow=c(1, 2))
+wordcloudfun(df[is.na(df$School)==F,])
+wordcloudfun(df[is.na(df$School)==T,])
+```
+Another interesting thing from the above wordcloud is that, there are common words "must", "may", "shall" in the wordcloud. Different presidents will use different kind of tones in their speech, here I divide speech into Toughtone, which sounds things should be done by force, and Smoothtone, which sounds voluntarily. The conclusion is presidents from law school have a smoother tone, seems like they have more experiences on how to persuade citizens.
+
+ 
+Additionaly, I found that presdents without law school background use "They", "Them", these appellation more frequency than presidents from law school, seems like presidents with aw school education do not want to discuss or talk about others, they care about themselves more. This justify one of the common words for these presidents' speech, "ourselves" .
+
+```{r, message=FALSE, warning=FALSE}
+mean_word<-function(df,word){
+docs <- Corpus(VectorSource(df$fulltext))
+docs <-tm_map(docs,content_transformer(tolower))
+docs <- tm_map(docs, removePunctuation)
+docs <- tm_map(docs, removeNumbers)
+docs <- tm_map(docs, stripWhitespace)
+docs <- tm_map(docs,stemDocument)
+tdm<-TermDocumentMatrix(docs)
+tdm.tidy=tidy(tdm)
+
+mean(tdm.tidy[tdm.tidy$term==word,]$count)}
+
+
+subjec_a<-mean_word(df[is.na(df$School)==F,],word="our")
+subjec_b<-mean_word(df[is.na(df$School)==T,],word="our")
+
+objec_a<-sum(mean_word(df[is.na(df$School)==F,],word="their"),
+        mean_word(df[is.na(df$School)==F,],word="them"),
+        mean_word(df[is.na(df$School)==F,],word="they"))
+objec_b<-sum(mean_word(df[is.na(df$School)==T,],word="their"),
+        mean_word(df[is.na(df$School)==T,],word="them"),
+        mean_word(df[is.na(df$School)==T,],word="they"))
+
+toughtone_a<-mean_word(df[is.na(df$School)==F,],word="should")
+toughtone_b<-mean_word(df[is.na(df$School)==T,],word="should")
+
+smoothtone_a<-mean_word(df[is.na(df$School)==F,],word="must")
+smoothtone_b<-mean_word(df[is.na(df$School)==T,],word="must")
+
+
+dt=matrix(c(rep("Law",4),rep("Not",4)),nrow=8,ncol=1)
+dt=as.data.frame(dt)
+colnames(dt)<-"obj"
+dt$var<-c(rep(c("subjective","objective","toughtone","smoothtone"),2))
+dt$value<-c(subjec_a,objec_a,toughtone_a,smoothtone_a,subjec_b,objec_b,toughtone_b,smoothtone_b)
+
+ggplot(dt, aes(x = var, y = value, fill = obj))+ 
+   geom_bar(stat="identity", position=position_dodge())
+
+
+
+```
+
+Presidents from Law school uses a little bit shorter sentences than the other group of presidents in their speech, but not significant difference.
+
+```{r, message=FALSE, warning=FALSE}
+
+sentence.list=NULL
+for(i in 1:nrow(df)){
+  sentences=sent_detect(df$fulltext[i],
+                        endmarks = c("?", ".", "!", "|",";"))
+  if(length(sentences)>0){
+    emotions=get_nrc_sentiment(sentences)
+    word.count=word_count(sentences)
+    emotions=diag(1/(word.count+0.01))%*%as.matrix(emotions)
+    sentence.list=rbind(sentence.list, 
+                        cbind(df[i,],
+                              sentences=as.character(sentences), 
+                              word.count,
+                              emotions)
+    )
+  }
+}
+
+sentence.list=
+  sentence.list%>%
+  filter(!is.na(word.count)) 
+
+
+e<-mean(sentence.list[is.na(sentence.list$School)==F,]$word.count)
+f<-mean(sentence.list[is.na(sentence.list$School)==T,]$word.count)
+
+dt = data.frame(obj = c("Law School","Not Law School"), val = c(e,f))
+ggplot(dt, aes(x = obj, y = val, fill = obj, group = factor(1))) + 
+    geom_bar(stat = "identity")
+```
+
+There is also no significent emotion difference between speeches from each group of presidents.
+
+ 
+Presidents donot have law school education use more positive words and trust emotion words than those do graduate from law school. Seems president graduate from law school use more neutral words and do not want to pouring out too freely.
+
+```{r, message=FALSE, warning=FALSE}
+emotion.list<-matrix(data=NA,nrow=nrow(df),ncol=10)
+for (i in 1:nrow(df)){
+  emotion.list[i,]=
+    apply(sentence.list[sentence.list$id==i,c(9:18)],2,mean)
+}
+
+emotion.list<-as.data.frame(emotion.list)
+
+colnames(emotion.list)<-c(colnames(sentence.list[,c(9:18)]))
+
+emotion.list$id=c(1:nrow(emotion.list))
+
+dfnew<-merge(emotion.list,df,by="id")
+
+colnames(emotion.list)[-11]
+
+```
+
+```{r}
+emotion.list.law<-dfnew[is.na(dfnew$School)==F,]
+emotion.law<-apply(emotion.list.law[,c(2:11)],2,mean)
+emotion.list.notlaw<-dfnew[is.na(dfnew$School)==T,]
+emotion.notlaw<-apply(emotion.list.notlaw[,c(2:11)],2,mean)
+
+dtnew<-matrix(c(rep("Law",10),rep("Not",10)),nrow=20,ncol=1)
+dtnew=as.data.frame(dtnew)
+colnames(dtnew)<-"obj"
+dtnew$var<-c(rep(colnames(emotion.list)[-11],2))
+dtnew$value<-c(emotion.law,emotion.notlaw)
+
+ggplot(dtnew, aes(x = var, y = value, fill = obj))+ 
+   geom_bar(stat="identity", position=position_dodge())
+
+```
+
+# Second Section 
+
+Compare difference between president with Graduate School background and those with Undergradute School background.
+
+
+From the graph, there is no significantly relationship between speech length and president from graduate school or not.
+
+
+From the 20th to 40th president, those with undergraduate degree make longer speech than those with graduate degree.
+
+
+```{r, message=FALSE, warning=FALSE}
+ggplot(df,aes(x=id,y=Words,color=as.numeric(is.na(df$Graduate.school)==F),group=is.na(df$Graduate.school)))+geom_point(alpha=0.8)+geom_smooth(alpha=.5, size=1)
+```
+
+
+# What is the difference between most common words?
+
+ 
+From comparation of two bar plots, president from graduate school have unique common words "Free", "Rights", "Believe", and also they are very similar to the common words of president from law school. 
+
+ 
+While in the speeches of president without law school background, the unique common words are "administration", "Duty".
+
+
+```{r, message=FALSE, warning=FALSE}
+commonword(df[is.na(df$Graduate.school)==F,])
+commonword(df[is.na(df$Graduate.school)==T,])
+```
+# Wordcloud
+A much clearly view of the most frequency words."WILL" is still the most frequency word.
+
+```{r, message=FALSE, warning=FALSE}
+par(mfrow=c(1, 2))
+wordcloudfun(df[is.na(df$Graduate.school)==F,])
+wordcloudfun(df[is.na(df$Graduate.school)==T,])
+```
+
+Again we look at the speech tone. The conclusion is presidents from graduate school have a smoother tone, seems like they have more experiences on how to persuade citizens, just as the presidents from law school.
+ 
+
+Additionaly, I found that presdents without graduate school background use "They", "Them", these appellation more frequency than presidents from gradute school, seems like presidents with aw school education do not want to discuss or talk about others, they care about themselves more. This also conslude the resident from graduate school use very similar tone as those from law school.
+
+
+```{r, message=FALSE, warning=FALSE}
+subjec_a<-mean_word(df[is.na(df$Graduate.school)==F,],word="our")
+subjec_b<-mean_word(df[is.na(df$Graduate.school)==T,],word="our")
+
+objec_a<-sum(mean_word(df[is.na(df$Graduate.school)==F,],word="their"),
+        mean_word(df[is.na(df$Graduate.school)==F,],word="them"),
+        mean_word(df[is.na(df$Graduate.school)==F,],word="they"))
+objec_b<-sum(mean_word(df[is.na(df$Graduate.school)==T,],word="their"),
+        mean_word(df[is.na(df$Graduate.school)==T,],word="them"),
+        mean_word(df[is.na(df$Graduate.school)==T,],word="they"))
+
+toughtone_a<-mean_word(df[is.na(df$Graduate.school)==F,],word="should")
+toughtone_b<-mean_word(df[is.na(df$Graduate.school)==T,],word="should")
+
+smoothtone_a<-mean_word(df[is.na(df$Graduate.school)==F,],word="must")
+smoothtone_b<-mean_word(df[is.na(df$Graduate.school)==T,],word="must")
+
+
+dt=matrix(c(rep("Graduate",4),rep("Undergraduate",4)),nrow=8,ncol=1)
+dt=as.data.frame(dt)
+colnames(dt)<-"obj"
+dt$var<-c(rep(c("subjective","objective","toughtone","smoothtone"),2))
+dt$value<-c(subjec_a,objec_a,toughtone_a,smoothtone_a,subjec_b,objec_b,toughtone_b,smoothtone_b)
+
+ggplot(dt, aes(x = var, y = value, fill = obj))+ 
+   geom_bar(stat="identity", position=position_dodge())
+
+
+```
+
+
+Presidents from graduate school uses a little bit shorter sentences than the other group of presidents in their speech, but not significant difference.
+
+
+```{r, message=FALSE, warning=FALSE}
+g<-mean(sentence.list[is.na(sentence.list$School)==F,]$word.count)
+h<-mean(sentence.list[is.na(sentence.list$School)==T,]$word.count)
+
+dt = data.frame(obj = c("Graduate School","Undergraduate School"), val = c(g,h))
+ggplot(dt, aes(x = obj, y = val, fill = obj, group = factor(1))) + 
+    geom_bar(stat = "identity")
+```
+
+There is also no significent emotion difference between speeches from each group of presidents.
+
+
+Presidents with only undergraduate school education use more positive words and trust emotion words than those from graduate school. Seems president with higher degree use more neutral words and do not want to pouring out too freely.
+
+```{r, message=FALSE, warning=FALSE}
+emotion.list.grad<-dfnew[is.na(dfnew$Graduate.school)==F,]
+emotion.grad<-apply(emotion.list.grad[,c(2:11)],2,mean)
+emotion.list.undergrad<-dfnew[is.na(dfnew$Graduate.school)==T,]
+emotion.undergrad<-apply(emotion.list.undergrad[,c(2:11)],2,mean)
+
+dtnew<-matrix(c(rep("Law",10),rep("Not",10)),nrow=20,ncol=1)
+dtnew=as.data.frame(dtnew)
+colnames(dtnew)<-"obj"
+dtnew$var<-c(rep(colnames(emotion.list)[-11],2))
+dtnew$value<-c(emotion.grad,emotion.undergrad)
+
+ggplot(dtnew, aes(x = var, y = value, fill = obj))+ 
+   geom_bar(stat="identity", position=position_dodge())
+
+```
+
+
+# Final conclusion
+
+President from law school control the length of inaugural speech at around 2000 words. They use shorter sentences, smoother tone, more neutral words and less frequency of using objective words than those who do not have law school background.
+
+President from graduate school have inaugural speeches very similar to those from law school while presidnt with only udergraduate degree have inaugural speeches very similar to those without law school background.
+
